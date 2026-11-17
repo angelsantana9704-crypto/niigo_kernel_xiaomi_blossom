@@ -11174,9 +11174,6 @@ void task_check_for_rotation(struct rq *src_rq)
 
 	if (force) {
 		queue_work_on(src_cpu, system_highpri_wq, &wr->w);
-		trace_sched_big_task_rotation(wr->src_cpu, wr->dst_cpu,
-					wr->src_task->pid, wr->dst_task->pid,
-					false, set_uclamp);
 	}
 }
 
@@ -11237,7 +11234,6 @@ void check_for_migration(struct task_struct *p)
 			get_task_struct(p);
 			migrate_running_task(new_cpu, p, rq);
 			put_task_struct(p);
-			trace_sched_big_task_migration(p->pid, cpu, new_cpu);
 			return;
 		}
 

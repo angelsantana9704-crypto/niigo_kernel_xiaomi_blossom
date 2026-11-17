@@ -263,6 +263,7 @@ static unsigned int hw_bc11_DCD(struct mtk_charger_type *info)
 		PMIC_RGS_BC11_CMP_OUT_ADDR,
 		PMIC_RGS_BC11_CMP_OUT_MASK,
 		PMIC_RGS_BC11_CMP_OUT_SHIFT);
+	pr_info("BC11: DCD raw comparator=%u\n", wChargerAvail);
 
 	/* RG_bc11_IPU_EN[1.0] = 00 */
 	bc11_set_register_value(info->regmap,
@@ -480,35 +481,35 @@ static void dump_charger_name(int type)
 
 static int get_charger_type(struct mtk_charger_type *info)
 {
-	enum power_supply_usb_type type;
+        enum power_supply_usb_type type;
 
-	hw_bc11_init(info);
-	if (hw_bc11_DCD(info)) {
-		info->psy_desc.type = POWER_SUPPLY_TYPE_USB;
-		type = POWER_SUPPLY_USB_TYPE_DCP;
-	} else {
-		if (hw_bc11_stepA2(info)) {
-			if (hw_bc11_stepB2(info)) {
-				info->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
-				type = POWER_SUPPLY_USB_TYPE_DCP;
-			} else {
-				info->psy_desc.type = POWER_SUPPLY_TYPE_USB_CDP;
-				type = POWER_SUPPLY_USB_TYPE_CDP;
-			}
-		} else {
-			info->psy_desc.type = POWER_SUPPLY_TYPE_USB;
-			type = POWER_SUPPLY_USB_TYPE_SDP;
-		}
-	}
+        hw_bc11_init(info);
+        if (hw_bc11_DCD(info)) {
+                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
+                type = POWER_SUPPLY_USB_TYPE_DCP;
+                pr_info("BC11: DCD detected; classify as DCP\n");
+        } else {
+                if (hw_bc11_stepA2(info)) {
+                        if (hw_bc11_stepB2(info)) {
+                                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
+                                type = POWER_SUPPLY_USB_TYPE_DCP;
+                        } else {
+                                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_CDP;
+                                type = POWER_SUPPLY_USB_TYPE_CDP;
+                        }
+                } else {
+                        info->psy_desc.type = POWER_SUPPLY_TYPE_USB;
+                        type = POWER_SUPPLY_USB_TYPE_SDP;
+                }
+        }
 
-	if (type != POWER_SUPPLY_USB_TYPE_DCP)
-		hw_bc11_done(info);
-	else
-		pr_info("charger type: skip bc11 release for BC12 DCP SPEC\n");
+        if (type != POWER_SUPPLY_USB_TYPE_DCP)
+                hw_bc11_done(info);
+        else
+                pr_info("charger type: skip bc11 release for BC12 DCP SPEC\n");
 
-	dump_charger_name(info->psy_desc.type);
-
-	return type;
+        dump_charger_name(info->psy_desc.type);
+        return type;
 }
 
 static int get_vbus_voltage(struct mtk_charger_type *info,

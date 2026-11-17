@@ -201,7 +201,7 @@ static inline unsigned int cpumask_local_spread(unsigned int i, int node)
 #define for_each_cpu_and(cpu, mask, and)	\
 	for ((cpu) = 0; (cpu) < 1; (cpu)++, (void)mask, (void)and)
 #else
-#if NR_CPUS <= BITS_PER_LONG
+#if NR_CPUS < BITS_PER_LONG
 static inline unsigned int cpumask_first(const struct cpumask *srcp)
 {
 	unsigned int nr;
@@ -484,7 +484,7 @@ static inline int cpumask_test_and_clear_cpu(int cpu, struct cpumask *cpumask)
 static inline void cpumask_setall(struct cpumask *dstp)
 {
 	/* bitmap_fill() isn't optimized for compile-time constants */
-#if NR_CPUS <= BITS_PER_LONG
+#if NR_CPUS < BITS_PER_LONG
 	*cpumask_bits(dstp) = BIT(NR_CPUS) - 1;
 #else
 	bitmap_fill(cpumask_bits(dstp), nr_cpumask_bits);
@@ -498,7 +498,7 @@ static inline void cpumask_setall(struct cpumask *dstp)
 static inline void cpumask_clear(struct cpumask *dstp)
 {
 	/* bitmap_zero() isn't optimized for compile-time constants */
-#if NR_CPUS <= BITS_PER_LONG
+#if NR_CPUS < BITS_PER_LONG
 	*cpumask_bits(dstp) = 0;
 #else
 	bitmap_zero(cpumask_bits(dstp), nr_cpumask_bits);
@@ -676,7 +676,7 @@ static inline void cpumask_copy(struct cpumask *dstp,
 				const struct cpumask *srcp)
 {
 	/* bitmap_copy() isn't optimized for compile-time constants */
-#if NR_CPUS <= BITS_PER_LONG
+#if NR_CPUS < BITS_PER_LONG
 	*cpumask_bits(dstp) = *cpumask_bits(srcp);
 #else
 	bitmap_copy(cpumask_bits(dstp), cpumask_bits(srcp), nr_cpumask_bits);
@@ -985,7 +985,7 @@ static inline const struct cpumask *get_cpu_mask(unsigned int cpu)
 
 #define cpu_is_offline(cpu)	unlikely(!cpu_online(cpu))
 
-#if NR_CPUS <= BITS_PER_LONG
+#if NR_CPUS < BITS_PER_LONG
 #define CPU_BITS_ALL						\
 {								\
 	[BITS_TO_LONGS(NR_CPUS)-1] = BITMAP_LAST_WORD_MASK(NR_CPUS)	\
@@ -1017,7 +1017,7 @@ cpumap_print_to_pagebuf(bool list, char *buf, const struct cpumask *mask)
 				      nr_cpu_ids);
 }
 
-#if NR_CPUS <= BITS_PER_LONG
+#if NR_CPUS < BITS_PER_LONG
 #define CPU_MASK_ALL							\
 (cpumask_t) { {								\
 	[BITS_TO_LONGS(NR_CPUS)-1] = BITMAP_LAST_WORD_MASK(NR_CPUS)	\

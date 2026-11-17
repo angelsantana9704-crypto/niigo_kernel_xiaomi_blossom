@@ -4,6 +4,7 @@
 #
 
 ccflags-y := -fno-function-sections -fno-data-sections
+CFLAGS_init_task.o += -fno-vectorize -fno-slp-vectorize
 
 ifdef CONFIG_KASAN_SW_TAGS
 KASAN_SANITIZE_main.o := n
@@ -40,3 +41,4 @@ include/generated/compile.h: FORCE
 	$(Q)$(CONFIG_SHELL) $(srctree)/scripts/mkcompile_h $@	\
 	"$(UTS_MACHINE)" "$(CONFIG_SMP)" "$(CONFIG_PREEMPT)"	\
 	"$(CC)" "$(LD)"
+CFLAGS_init_task.o += -mllvm -hot-cold-split=false
