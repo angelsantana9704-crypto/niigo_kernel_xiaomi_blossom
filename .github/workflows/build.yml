@@ -1,0 +1,67 @@
+name: Angelican Kernel Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [yoka_rb2]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev libncurses-dev lz4 python3 rsync cpio device-tree-compiler
+
+      - name: Download Android toolchains
+        run: |
+          mkdir -p toolchains/clang
+          curl -fL "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android11-release/clang-r383902.tar.gz" -o /tmp/clang.tar.gz
+          tar -xzf /tmp/clang.tar.gz -C toolchains/clang
+          git clone --depth=1 --single-branch -b android11-release https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchains/gcc64
+          git clone --depth=1 --single-branch -b android11-release https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 toolchains/gcc32
+          test -x toolchains/gcc64/bin/aarch64-linux-android-elfedit
+          ln -sf aarch64-linux-android-elfedit toolchains/gcc64/bin/aarch64-linux-androidkernel-elfedit
+
+      - name: Configure and compile
+        run: |
+          set -o pipefail
+          export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc64/bin:$GITHUB_WORKSPACE/toolchains/gcc32/bin:$PATH"
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/toolchains/clang/lib64:$LD_LIBRARY_PATH"
+          export CROSS_COMPILE="$GITHUB_WORKSPACE/toolchains/gcc64/bin/aarch64-linux-androidkernel-"
+          export CROSS_COMPILE_COMPAT="$GITHUB_WORKSPACE/toolchains/gcc32/bin/arm-linux-androideabi-"
+          mkdir -p out
+          cp blossom_defconfig.saved out/.config
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- olddefconfig 2>&1 | tee config.log
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz dtbs 2>&1 | tee build.log
+          test -s out/arch/arm64/boot/Image.gz
+          test -s out/arch/arm64/boot/dts/mediatek/dandelion.dtb
+
+      - name: Upload kernel artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: angelican-kernel
+          path: |
+            out/arch/arm64/boot/Image.gz
+            out/arch/arm64/boot/dts/mediatek/*.dtb
+            out/.config
+            out/System.map
+            out/vmlinux
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: angelican-build-logs
+          path: |
+            config.log
+            build.log
+          if-no-files-found: ignore
