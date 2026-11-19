@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev libncurses-dev lz4 python3 rsync cpio device-tree-compiler
+          sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev libncurses-dev lz4 python3 rsync cpio device-tree-compiler ccache
 
       - name: Download Android toolchains
         run: |
@@ -29,17 +29,28 @@ jobs:
           test -x toolchains/gcc64/bin/aarch64-linux-android-elfedit
           ln -sf aarch64-linux-android-elfedit toolchains/gcc64/bin/aarch64-linux-androidkernel-elfedit
 
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ github.ref }}-
+            ${{ runner.os }}-ccache-
       - name: Configure and compile
         run: |
           set -o pipefail
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          export CCACHE_MAXSIZE=5G
+          export CCACHE_COMPILERCHECK=content
           export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc64/bin:$GITHUB_WORKSPACE/toolchains/gcc32/bin:$PATH"
           export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/toolchains/clang/lib64:$LD_LIBRARY_PATH"
           export CROSS_COMPILE="$GITHUB_WORKSPACE/toolchains/gcc64/bin/aarch64-linux-androidkernel-"
           export CROSS_COMPILE_COMPAT="$GITHUB_WORKSPACE/toolchains/gcc32/bin/arm-linux-androideabi-"
           mkdir -p out
           cp blossom_defconfig.saved out/.config
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- olddefconfig 2>&1 | tee config.log
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz dtbs 2>&1 | tee build.log
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- olddefconfig 2>&1 | tee config.log
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz dtbs 2>&1 | tee build.log
           test -s out/arch/arm64/boot/Image.gz
           test -s out/arch/arm64/boot/dts/mediatek/dandelion.dtb
 
