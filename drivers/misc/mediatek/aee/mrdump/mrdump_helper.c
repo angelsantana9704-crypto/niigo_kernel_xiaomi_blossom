@@ -4,6 +4,7 @@
  */
 
 #include <linux/init.h>
+#include <linux/kallsyms.h>
 #include <linux/memblock.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -732,9 +733,29 @@ void aee__flush_dcache_area(void *addr, size_t len)
 	__flush_dcache_area(addr, len);
 }
 
+raw_spinlock_t *p_logbuf_lock;
+struct semaphore *p_console_sem;
 void aee_zap_locks(void)
 {
-	aee_wdt_zap_locks();
+	if (!p_logbuf_lock) {
+		p_logbuf_lock = (void *)kallsyms_lookup_name("logbuf_lock");
+		if (!p_logbuf_lock) {
+			aee_sram_printk("%s failed to get logbuf lock\n",
+					__func__);
+			return;
+		}
+	}
+	if (!p_console_sem) {
+		p_console_sem = (void *)kallsyms_lookup_name("console_sem");
+		if (!p_console_sem) {
+			aee_sram_printk("%s failed to get console_sem\n",
+					__func__);
+			return;
+		}
+	}
+	debug_locks_off();
+	raw_spin_lock_init(p_logbuf_lock);
+	sema_init(p_console_sem, 1);
 }
 
 
