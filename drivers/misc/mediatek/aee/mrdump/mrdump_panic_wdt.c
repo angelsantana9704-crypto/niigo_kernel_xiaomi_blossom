@@ -144,7 +144,6 @@ static void aee_wdt_dump_backtrace(unsigned int cpu, struct pt_regs *regs)
 	int i;
 	unsigned long high, bottom, fp;
 	struct stackframe cur_frame;
-	struct pt_regs *excp_regs;
 
 	bottom = regs->reg_sp;
 	if (!mrdump_virt_addr_valid(bottom)) {

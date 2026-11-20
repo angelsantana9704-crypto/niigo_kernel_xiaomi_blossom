@@ -50,9 +50,31 @@ jobs:
           mkdir -p out
           cp blossom_defconfig.saved out/.config
           make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- olddefconfig 2>&1 | tee config.log
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz dtbs 2>&1 | tee build.log
-          test -s out/arch/arm64/boot/Image.gz
-          test -s out/arch/arm64/boot/dts/mediatek/dandelion.dtb
+          echo "=== Isolated kernel/configs.o: 10-minute limit ==="
+          timeout --signal=TERM --kill-after=30s 10m make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- kernel/configs.o 2>&1 | tee configs-object.log
+          echo "=== Full kernel build ==="
+          (make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz dtbs 2>&1 | tee build.log) &
+          BUILD_PID=$!
+          (
+            while kill -0 "$BUILD_PID" 2>/dev/null; do
+              sleep 60
+              if kill -0 "$BUILD_PID" 2>/dev/null; then
+                echo "===== Build heartbeat: $(date -u) ====="
+                ps -eo pid,ppid,stat,etime,%cpu,%mem,comm,args --sort=-%cpu | head -n 12
+                echo "===== Last build output ====="
+                tail -n 10 build.log || true
+              fi
+            done
+          ) &
+          HEARTBEAT_PID=$!
+          if wait "$BUILD_PID"; then BUILD_STATUS=0; else BUILD_STATUS=$?; fi
+          kill "$HEARTBEAT_PID" 2>/dev/null || true
+          wait "$HEARTBEAT_PID" 2>/dev/null || true
+          if [ "$BUILD_STATUS" -eq 0 ]; then
+            test -s out/arch/arm64/boot/Image.gz
+            test -s out/arch/arm64/boot/dts/mediatek/dandelion.dtb
+          fi
+          exit "$BUILD_STATUS"
 
       - name: Upload kernel artifacts
         if: success()
@@ -74,5 +96,6 @@ jobs:
           name: angelican-build-logs
           path: |
             config.log
+            configs-object.log
             build.log
           if-no-files-found: ignore
