@@ -42,6 +42,7 @@
 #define gc02m10_SENSOR_GAIN_MAX_VALID_INDEX  16
 #define gc02m10_SENSOR_GAIN_MAP_SIZE         16
 #define gc02m10_SENSOR_DGAIN_BASE            0x400
+#define gc02m10_SENSOR_ID            0x02e0
 
 enum{
 	IMGSENSOR_MODE_INIT,
