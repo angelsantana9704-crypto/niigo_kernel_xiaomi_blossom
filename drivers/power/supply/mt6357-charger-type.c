@@ -352,7 +352,7 @@ static unsigned int hw_bc11_stepB2(struct mtk_charger_type *info)
 {
 	unsigned int wChargerAvail = 0;
 
-	/*enable the voltage source to DM*/
+	/* enable the voltage source to DM */
 	bc11_set_register_value(info->regmap,
 		PMIC_RG_BC11_VSRC_EN_ADDR,
 		PMIC_RG_BC11_VSRC_EN_MASK,
@@ -364,7 +364,7 @@ static unsigned int hw_bc11_stepB2(struct mtk_charger_type *info)
 		PMIC_RG_BC11_IPD_EN_MASK,
 		PMIC_RG_BC11_IPD_EN_SHIFT,
 		0x2);
-	/* VREF threshold voltage for comparator  =0.325V */
+	/* VREF threshold voltage for comparator = 0.325V */
 	bc11_set_register_value(info->regmap,
 		PMIC_RG_BC11_VREF_VTH_ADDR,
 		PMIC_RG_BC11_VREF_VTH_MASK,
@@ -381,7 +381,8 @@ static unsigned int hw_bc11_stepB2(struct mtk_charger_type *info)
 		PMIC_RGS_BC11_CMP_OUT_ADDR,
 		PMIC_RGS_BC11_CMP_OUT_MASK,
 		PMIC_RGS_BC11_CMP_OUT_SHIFT);
-	/*reset to default value*/
+
+	/* reset to default value */
 	bc11_set_register_value(info->regmap,
 		PMIC_RG_BC11_VSRC_EN_ADDR,
 		PMIC_RG_BC11_VSRC_EN_MASK,
@@ -397,6 +398,7 @@ static unsigned int hw_bc11_stepB2(struct mtk_charger_type *info)
 		PMIC_RG_BC11_CMP_EN_MASK,
 		PMIC_RG_BC11_CMP_EN_SHIFT,
 		0x0);
+
 	if (wChargerAvail == 1) {
 		bc11_set_register_value(info->regmap,
 			PMIC_RG_BC11_VSRC_EN_ADDR,
@@ -406,7 +408,6 @@ static unsigned int hw_bc11_stepB2(struct mtk_charger_type *info)
 		pr_info("charger type: DCP, keep DM voltage source in stepB2\n");
 	}
 	return wChargerAvail;
-
 }
 
 static void hw_bc11_done(struct mtk_charger_type *info)
@@ -484,24 +485,36 @@ static int get_charger_type(struct mtk_charger_type *info)
         enum power_supply_usb_type type;
 
         hw_bc11_init(info);
-        if (hw_bc11_DCD(info)) {
-                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
-                type = POWER_SUPPLY_USB_TYPE_DCP;
-                pr_info("BC11: DCD detected; classify as DCP\n");
-        } else {
-                if (hw_bc11_stepA2(info)) {
-                        if (hw_bc11_stepB2(info)) {
-                                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
-                                type = POWER_SUPPLY_USB_TYPE_DCP;
-                        } else {
-                                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_CDP;
-                                type = POWER_SUPPLY_USB_TYPE_CDP;
-                        }
-                } else {
-                        info->psy_desc.type = POWER_SUPPLY_TYPE_USB;
-                        type = POWER_SUPPLY_USB_TYPE_SDP;
-                }
-        }
+	{
+		unsigned int dcd_ok = 0;
+		int retry;
+
+		for (retry = 0; retry < 3; retry++) {
+			dcd_ok = hw_bc11_DCD(info);
+			if (dcd_ok)
+				break;
+			msleep(20);
+		}
+
+		if (dcd_ok) {
+	                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
+	                type = POWER_SUPPLY_USB_TYPE_DCP;
+	                pr_info("BC11: DCD detected; classify as DCP\n");
+	        } else {
+	                if (hw_bc11_stepA2(info)) {
+	                        if (hw_bc11_stepB2(info)) {
+	                                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_DCP;
+	                                type = POWER_SUPPLY_USB_TYPE_DCP;
+	                        } else {
+	                                info->psy_desc.type = POWER_SUPPLY_TYPE_USB_CDP;
+	                                type = POWER_SUPPLY_USB_TYPE_CDP;
+	                        }
+	                } else {
+	                        info->psy_desc.type = POWER_SUPPLY_TYPE_USB;
+	                        type = POWER_SUPPLY_USB_TYPE_SDP;
+	                }
+		}
+	}
 
         if (type != POWER_SUPPLY_USB_TYPE_DCP)
                 hw_bc11_done(info);
