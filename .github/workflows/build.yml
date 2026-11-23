@@ -53,7 +53,7 @@ jobs:
           echo "=== Isolated kernel/configs.o: 10-minute limit ==="
           timeout --signal=TERM --kill-after=30s 10m make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- kernel/configs.o 2>&1 | tee configs-object.log
           echo "=== Full kernel build ==="
-          (make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz arch/arm64/boot/dts/mediatek/dandelion.dtb arch/arm64/boot/dts/mediatek/mt6765.dtb 2>&1 | tee build.log) &
+          (make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz mediatek/dandelion.dtb mediatek/mt6765.dtb 2>&1 | tee build.log) &
           BUILD_PID=$!
           (
             while kill -0 "$BUILD_PID" 2>/dev/null; do
