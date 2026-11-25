@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
     steps:
       - uses: actions/checkout@v4
 
@@ -30,31 +32,44 @@ jobs:
           ln -sf aarch64-linux-android-elfedit toolchains/gcc64/bin/aarch64-linux-androidkernel-elfedit
 
       - name: Restore ccache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: .ccache
-          key: ${{ runner.os }}-ccache-${{ github.ref }}-${{ github.sha }}
+          key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-ccache-${{ github.ref }}-
+            ${{ runner.os }}-ccache-${{ github.ref_name }}-
             ${{ runner.os }}-ccache-
+
       - name: Configure and compile
         run: |
-          set -o pipefail
+          set -euo pipefail
+
           export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          export CCACHE_BASEDIR="$GITHUB_WORKSPACE"
           export CCACHE_MAXSIZE=5G
           export CCACHE_COMPILERCHECK=content
-          export PATH="$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc64/bin:$GITHUB_WORKSPACE/toolchains/gcc32/bin:$PATH"
-          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/toolchains/clang/lib64:$LD_LIBRARY_PATH"
+          export PATH="/usr/lib/ccache:$GITHUB_WORKSPACE/toolchains/clang/bin:$GITHUB_WORKSPACE/toolchains/gcc64/bin:$GITHUB_WORKSPACE/toolchains/gcc32/bin:$PATH"
+          export LD_LIBRARY_PATH="$GITHUB_WORKSPACE/toolchains/clang/lib64:${LD_LIBRARY_PATH:-}"
           export CROSS_COMPILE="$GITHUB_WORKSPACE/toolchains/gcc64/bin/aarch64-linux-androidkernel-"
           export CROSS_COMPILE_COMPAT="$GITHUB_WORKSPACE/toolchains/gcc32/bin/arm-linux-androideabi-"
+
+          echo "=== Initial ccache statistics ==="
+          ccache -s
+          ccache -z
+
           mkdir -p out
           cp blossom_defconfig.saved out/.config
-          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- olddefconfig 2>&1 | tee config.log
+
+          make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" HOSTCC="ccache gcc" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- olddefconfig 2>&1 | tee config.log
+
           echo "=== Isolated kernel/configs.o: 10-minute limit ==="
-          timeout --signal=TERM --kill-after=30s 10m make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- kernel/configs.o 2>&1 | tee configs-object.log
-          echo "=== Full kernel build ==="
-          (make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz mediatek/dandelion.dtb mediatek/mt6765.dtb 2>&1 | tee build.log) &
+          timeout --signal=TERM --kill-after=30s 10m make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" HOSTCC="ccache gcc" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- kernel/configs.o 2>&1 | tee configs-object.log
+
+          echo "=== Full kernel build: 50-minute limit ==="
+
+          (timeout --signal=TERM --kill-after=30s 50m make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" HOSTCC="ccache gcc" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz mediatek/dandelion.dtb mediatek/mt6765.dtb 2>&1 | tee build.log) &
           BUILD_PID=$!
+
           (
             while kill -0 "$BUILD_PID" 2>/dev/null; do
               sleep 60
@@ -67,14 +82,32 @@ jobs:
             done
           ) &
           HEARTBEAT_PID=$!
-          if wait "$BUILD_PID"; then BUILD_STATUS=0; else BUILD_STATUS=$?; fi
+
+          if wait "$BUILD_PID"; then
+            BUILD_STATUS=0
+          else
+            BUILD_STATUS=$?
+          fi
+
           kill "$HEARTBEAT_PID" 2>/dev/null || true
           wait "$HEARTBEAT_PID" 2>/dev/null || true
+
+          echo "=== ccache statistics after build ==="
+          ccache -s
+
           if [ "$BUILD_STATUS" -eq 0 ]; then
             test -s out/arch/arm64/boot/Image.gz
             test -s out/arch/arm64/boot/dts/mediatek/dandelion.dtb
           fi
+
           exit "$BUILD_STATUS"
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Upload kernel artifacts
         if: success()
