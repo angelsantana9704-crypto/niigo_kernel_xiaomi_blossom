@@ -67,7 +67,7 @@ jobs:
 
           echo "=== Full kernel build: 50-minute limit ==="
 
-          (timeout --signal=TERM --kill-after=30s 50m make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" HOSTCC="ccache gcc" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz mediatek/dandelion.dtb mediatek/mt6765.dtb 2>&1 | tee build.log) &
+          (make O=out ARCH=arm64 LLVM=1 LLVM_IAS=1 CC="ccache clang" HOSTCC="ccache gcc" CROSS_COMPILE="$CROSS_COMPILE" CROSS_COMPILE_COMPAT="$CROSS_COMPILE_COMPAT" CLANG_TRIPLE=aarch64-linux-gnu- -j"$(nproc)" Image.gz mediatek/dandelion.dtb mediatek/mt6765.dtb 2>&1 | tee build.log) &
           BUILD_PID=$!
 
           (
